@@ -1,38 +1,40 @@
-# MCP 使用时配置工具 (MCP Config During Use)
+# MCP Config During Use
 
-这是一个Dify插件，用于通过HTTP with SSE传输使用MCP协议来发现和调用工具，支持在每次使用时单独配置连接信息。
+A Dify plugin that allows configuring MCP (Modular Component Protocol) connections during use. It enables discovering and calling tools via MCP protocol through HTTP with SSE transport, with configuration done at runtime.
 
-## 功能特点
+[English](#mcp-config-during-use) | [中文简体](README_zh.md)
 
-- 支持在每次调用时单独配置MCP服务器连接信息
-- 提供列出MCP服务器上可用工具的功能
-- 提供调用MCP服务器上工具的功能
-- 支持配置HTTP请求头，实现授权等功能
-- 支持配置不同的超时参数
+## Features
 
-## 工具列表
+- Configure MCP server connection information for each call separately
+- List available tools on MCP servers
+- Call specific tools on MCP servers
+- Support HTTP headers configuration for authorization and other features
+- Configure different timeout parameters
 
-插件提供两个主要工具：
+## Tool List
 
-1. **列出MCP工具 (mcp_list_tools)**
-   - 用于列出MCP服务器上可用的工具
+The plugin provides two main tools:
 
-2. **调用MCP工具 (mcp_call_tool)**
-   - 用于调用MCP服务器上的特定工具
+1. **List MCP Tools (mcp_list_tools)**
+   - Used to list all available tools on an MCP server
 
-## 使用方法
+2. **Call MCP Tool (mcp_call_tool)**
+   - Used to call a specific tool on an MCP server
 
-### 列出MCP工具
+## Usage
 
-使用`mcp_list_tools`工具可以列出指定MCP服务器上的所有可用工具。
+### List MCP Tools
 
-参数说明:
-- `server_url` (必填): MCP服务器的SSE端点URL
-- `headers` (可选): HTTP请求头，JSON格式
-- `timeout` (可选): HTTP请求超时时间（秒）
-- `sse_read_timeout` (可选): SSE读取超时时间（秒）
+Use the `mcp_list_tools` tool to list all available tools on a specified MCP server.
 
-示例:
+Parameters:
+- `server_url` (required): The SSE endpoint URL of the MCP Server
+- `headers` (optional): HTTP headers in JSON format
+- `timeout` (optional): HTTP request timeout in seconds
+- `sse_read_timeout` (optional): SSE read timeout in seconds
+
+Example:
 ```json
 {
   "server_url": "http://127.0.0.1:8000/sse",
@@ -42,19 +44,19 @@
 }
 ```
 
-### 调用MCP工具
+### Call MCP Tool
 
-使用`mcp_call_tool`工具可以调用MCP服务器上的特定工具。
+Use the `mcp_call_tool` tool to call a specific tool on an MCP server.
 
-参数说明:
-- `server_url` (必填): MCP服务器的SSE端点URL
-- `headers` (可选): HTTP请求头，JSON格式
-- `timeout` (可选): HTTP请求超时时间（秒）
-- `sse_read_timeout` (可选): SSE读取超时时间（秒）
-- `tool_name` (必填): 要调用的工具名称
-- `arguments` (必填): 工具参数，JSON格式
+Parameters:
+- `server_url` (required): The SSE endpoint URL of the MCP Server
+- `headers` (optional): HTTP headers in JSON format
+- `timeout` (optional): HTTP request timeout in seconds
+- `sse_read_timeout` (optional): SSE read timeout in seconds
+- `tool_name` (required): Name of the tool to execute
+- `arguments` (required): Tool arguments in JSON format
 
-示例:
+Example:
 ```json
 {
   "server_url": "http://127.0.0.1:8000/sse",
@@ -66,24 +68,25 @@
 }
 ```
 
-## 与预授权MCP工具的区别
+## Differences from Pre-authorized MCP Tools
 
-与预授权的MCP工具相比，此插件的主要区别是：
+Compared to pre-authorized MCP tools, the main differences of this plugin are:
 
-1. **配置方式**: 本插件支持在每次调用时配置连接信息，而预授权MCP工具需要在provider级别预先配置
-2. **灵活性**: 不同的工具调用可以连接不同的MCP服务器
-3. **隔离性**: 每个应用可以使用自己的MCP服务器配置，不会互相影响
-4. **权限管理**: 无需在provider级别进行全局授权，更灵活的权限控制
+1. **Configuration Method**: This plugin allows configuring connection information at call time, while pre-authorized MCP tools require configuration at the provider level
+2. **Flexibility**: Different tool calls can connect to different MCP servers
+3. **Isolation**: Each application can use its own MCP server configuration without affecting others
+4. **Permission Management**: No need for global authorization at the provider level, providing more flexible permission control
 
-## 安装要求
+## Requirements
 
-- Python 3.12 或更高版本
-- 依赖包:
+- Python 3.12 or higher
+- Dependencies:
+  - httpx >= 0.27.0
   - httpx-sse >= 0.4.0
   - dify_plugin = 0.0.1b76
 
-## 注意事项
+## Notes
 
-- 确保提供的MCP服务器URL是有效的并且支持SSE连接
-- 在`headers`和`arguments`参数中，需要将JSON对象转换为字符串，并正确转义双引号
-- 根据需要调整超时参数，特别是对于长时间运行的工具调用 
+- Ensure the provided MCP server URL is valid and supports SSE connections
+- In the `headers` and `arguments` parameters, JSON objects need to be converted to strings with properly escaped double quotes
+- Adjust timeout parameters as needed, especially for long-running tool calls 
