@@ -1,6 +1,6 @@
 # Privacy Policy
 
-This plugin **MCP Config During Use** is designed to connect to MCP (Modular Component Protocol) servers through HTTP with SSE transport. The plugin itself does not collect, store, or transmit any personal data. 
+This plugin **MCP Config During Use** is designed to connect to MCP (Model Context Protocol) servers through HTTP with SSE transport. The plugin itself does not collect, store, or transmit any personal data. 
 
 ## Data Processing
 

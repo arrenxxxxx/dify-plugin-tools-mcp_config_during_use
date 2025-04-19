@@ -1,6 +1,6 @@
 # MCP Config During Use
 
-A Dify plugin that allows configuring MCP (Modular Component Protocol) connections during use. It enables discovering and calling tools via MCP protocol through HTTP with SSE transport, with configuration done at runtime.
+A Dify plugin that allows configuring MCP (Model Context Protocol) connections during use. It enables discovering and calling tools via MCP protocol through HTTP with SSE transport, with configuration done at runtime.
 
 [English](#mcp-config-during-use) | [中文简体](README_zh.md)
 

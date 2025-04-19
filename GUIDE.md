@@ -4,7 +4,7 @@
 
 ## 概述
 
-MCP (Modular Component Protocol) 是一种协议，允许大型语言模型(LLM)应用与外部工具交互。本插件通过HTTP with SSE传输使用MCP协议，支持在每次使用时单独配置连接信息，无需预先在provider级别进行授权。
+MCP (Model Context Protocol) 是一种协议，允许大型语言模型(LLM)应用与外部工具交互。本插件通过HTTP with SSE传输使用MCP协议，支持在每次使用时单独配置连接信息，无需预先在provider级别进行授权。
 
 ## 安装步骤
 
