@@ -28,7 +28,7 @@ class TransportStrategy(ABC):
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_interval = retry_interval
-        self.client = httpx.Client(headers=headers)
+        self.client = httpx.Client(headers=headers, follow_redirects=True, max_redirects=3)
         self._request_id = 0
         self.connect()
     
@@ -63,7 +63,7 @@ class TransportStrategy(ABC):
                 "protocolVersion": "2025-06-27",
                 "capabilities": {},
                 "clientInfo": {
-                    "name": "mcp",
+                    "name": "MCP CONFIG DURING USE",
                     "version": "1.10.1"
                 }
             }
@@ -235,7 +235,7 @@ class SseTransportStrategy(TransportStrategy):
 
     def _listen_messages(self) -> None:
         """listen to the SSE messages"""
-        logging.info(f"Connecting to SSE endpoint: {remove_request_params(self.url)}")
+        logging.debug(f"Connecting to SSE endpoint: {remove_request_params(self.url)}")
         retry_count = 0
         
         while not self.should_stop.is_set() and retry_count <= self.max_retries:
@@ -311,6 +311,10 @@ class SseTransportStrategy(TransportStrategy):
             headers={'Content-Type': 'application/json'},
             timeout=self.timeout
         )
+        if (response.url != self.endpoint_url):
+            logging.debug(f"SSE redirected url: {response.url}")
+            self.endpoint_url = str(response.url)
+
         response.raise_for_status()
         logging.debug(f"Client message sent successfully: {response.status_code}")
         
@@ -386,6 +390,10 @@ class StreamableHttpTransportStrategy(TransportStrategy):
                 headers=headers,
                 timeout=self.timeout
             )
+            if (response.url != self.mcp_endpoint):
+                logging.debug(f"Streamable HTTP redirected url: {response.url}")
+                self.mcp_endpoint = str(response.url)
+
             response.raise_for_status()
             
             if 'Mcp-Session-Id' in response.headers:
@@ -478,7 +486,7 @@ class TransportFactory:
                               retry_interval: float = 2.0) -> TransportStrategy:
         """auto detect and create the appropriate transport strategy"""
         
-        logging.info(f"Auto-detecting transport type for: {url}")
+        logging.debug(f"Auto-detecting transport type for: {url}")
         try:
             streamable_http_transport = StreamableHttpTransportStrategy(
                 url=url,
@@ -488,12 +496,13 @@ class TransportFactory:
                 retry_interval=retry_interval,
             )
             streamable_http_transport.pre_initialize()
+            logging.debug(f"Streamable HTTP detection success")
             return streamable_http_transport
         except Exception as e:
-            logging.info(f"Streamable HTTP detection failed: {e}")
+            logging.debug(f"Streamable HTTP detection failed: {e}")
         
         # if Streamable HTTP detection fails, fall back to SSE
-        logging.info("Falling back to SSE transport")
+        logging.debug("Falling back to SSE transport")
         return SseTransportStrategy(
             url=url,
             headers=headers,

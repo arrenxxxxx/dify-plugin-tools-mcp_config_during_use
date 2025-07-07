@@ -1,150 +1,117 @@
-# 使用时配置的MCP工具使用指南
+## User Guide of how to develop a Dify Plugin
 
-本指南将帮助你理解和使用"使用时配置的MCP工具"插件，这是一个允许你在每次使用时配置MCP服务器连接的Dify插件。
+Hi there, looks like you have already created a Plugin, now let's get you started with the development!
 
-## 概述
+### Choose a Plugin type you want to develop
 
-MCP (Model Context Protocol) 是一种协议，允许大型语言模型(LLM)应用与外部工具交互。本插件通过HTTP with SSE传输使用MCP协议，支持在每次使用时单独配置连接信息，无需预先在provider级别进行授权。
+Before start, you need some basic knowledge about the Plugin types, Plugin supports to extend the following abilities in Dify:
+- **Tool**: Tool Providers like Google Search, Stable Diffusion, etc. it can be used to perform a specific task.
+- **Model**: Model Providers like OpenAI, Anthropic, etc. you can use their models to enhance the AI capabilities.
+- **Endpoint**: Like Service API in Dify and Ingress in Kubernetes, you can extend a http service as an endpoint and control its logics using your own code.
 
-## 安装步骤
+Based on the ability you want to extend, we have divided the Plugin into three types: **Tool**, **Model**, and **Extension**.
 
-1. 在Dify平台上，导航至"插件"部分
-2. 找到并安装"使用时配置的MCP工具"插件
-3. 插件安装后即可使用，无需全局配置
+- **Tool**: It's a tool provider, but not only limited to tools, you can implement an endpoint there, for example, you need both `Sending Message` and `Receiving Message` if you are building a Discord Bot, **Tool** and **Endpoint** are both required.
+- **Model**: Just a model provider, extending others is not allowed.
+- **Extension**: Other times, you may only need a simple http service to extend the functionalities, **Extension** is the right choice for you.
 
-## 使用场景
+I believe you have chosen the right type for your Plugin while creating it, if not, you can change it later by modifying the `manifest.yaml` file.
 
-本插件适用于以下场景：
+### Manifest
 
-1. 需要在不同应用中连接不同MCP服务器
-2. 需要在同一应用内使用多个不同的MCP服务
-3. 对不同环境（如开发、测试、生产）使用不同的MCP服务配置
-4. 需要更灵活的权限控制
+Now you can edit the `manifest.yaml` file to describe your Plugin, here is the basic structure of it:
 
-## 详细使用说明
+- version(version, required)：Plugin's version
+- type(type, required)：Plugin's type, currently only supports `plugin`, future support `bundle`
+- author(string, required)：Author, it's the organization name in Marketplace and should also equals to the owner of the repository
+- label(label, required)：Multi-language name
+- created_at(RFC3339, required)：Creation time, Marketplace requires that the creation time must be less than the current time
+- icon(asset, required)：Icon path
+- resource (object)：Resources to be applied
+  - memory (int64)：Maximum memory usage, mainly related to resource application on SaaS for serverless, unit bytes
+  - permission(object)：Permission application
+    - tool(object)：Reverse call tool permission
+      - enabled (bool)
+    - model(object)：Reverse call model permission
+      - enabled(bool)
+      - llm(bool)
+      - text_embedding(bool)
+      - rerank(bool)
+      - tts(bool)
+      - speech2text(bool)
+      - moderation(bool)
+    - node(object)：Reverse call node permission
+      - enabled(bool) 
+    - endpoint(object)：Allow to register endpoint permission
+      - enabled(bool)
+    - app(object)：Reverse call app permission
+      - enabled(bool)
+    - storage(object)：Apply for persistent storage permission
+      - enabled(bool)
+      - size(int64)：Maximum allowed persistent memory, unit bytes
+- plugins(object, required)：Plugin extension specific ability yaml file list, absolute path in the plugin package, if you need to extend the model, you need to define a file like openai.yaml, and fill in the path here, and the file on the path must exist, otherwise the packaging will fail.
+  - Format
+    - tools(list[string]): Extended tool suppliers, as for the detailed format, please refer to [Tool Guide](https://docs.dify.ai/docs/plugins/standard/tool_provider)
+    - models(list[string])：Extended model suppliers, as for the detailed format, please refer to [Model Guide](https://docs.dify.ai/docs/plugins/standard/model_provider)
+    - endpoints(list[string])：Extended Endpoints suppliers, as for the detailed format, please refer to [Endpoint Guide](https://docs.dify.ai/docs/plugins/standard/endpoint_group)
+  - Restrictions
+    - Not allowed to extend both tools and models
+    - Not allowed to have no extension
+    - Not allowed to extend both models and endpoints
+    - Currently only supports up to one supplier of each type of extension
+- meta(object)
+  - version(version, required)：manifest format version, initial version 0.0.1
+  - arch(list[string], required)：Supported architectures, currently only supports amd64 arm64
+  - runner(object, required)：Runtime configuration
+    - language(string)：Currently only supports python
+    - version(string)：Language version, currently only supports 3.12
+    - entrypoint(string)：Program entry, in python it should be main
 
-### 列出MCP工具
+### Install Dependencies
 
-`mcp_list_tools`工具用于列出MCP服务器上所有可用的工具。
+- First of all, you need a Python 3.11+ environment, as our SDK requires that.
+- Then, install the dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+- If you want to add more dependencies, you can add them to the `requirements.txt` file, once you have set the runner to python in the `manifest.yaml` file, `requirements.txt` will be automatically generated and used for packaging and deployment.
 
-#### 参数详解
+### Implement the Plugin
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| server_url | 字符串 | 是 | MCP服务器的SSE端点URL |
-| headers | 字符串 | 否 | HTTP请求头，JSON格式 |
-| timeout | 数字 | 否 | HTTP请求超时时间（秒），默认60秒 |
-| sse_read_timeout | 数字 | 否 | SSE读取超时时间（秒），默认300秒 |
+Now you can start to implement your Plugin, by following these examples, you can quickly understand how to implement your own Plugin:
 
-#### 示例调用
+- [OpenAI](https://github.com/langgenius/dify-plugin-sdks/tree/main/python/examples/openai): best practice for model provider
+- [Google Search](https://github.com/langgenius/dify-plugin-sdks/tree/main/python/examples/google): a simple example for tool provider
+- [Neko](https://github.com/langgenius/dify-plugin-sdks/tree/main/python/examples/neko): a funny example for endpoint group
 
-```json
-{
-  "server_url": "http://127.0.0.1:8000/sse",
-  "headers": "{\"Authorization\":\"Bearer your_token\"}",
-  "timeout": 60,
-  "sse_read_timeout": 300
-}
+### Test and Debug the Plugin
+
+You may already noticed that a `.env.example` file in the root directory of your Plugin, just copy it to `.env` and fill in the corresponding values, there are some environment variables you need to set if you want to debug your Plugin locally.
+
+- `INSTALL_METHOD`: Set this to `remote`, your plugin will connect to a Dify instance through the network.
+- `REMOTE_INSTALL_HOST`: The host of your Dify instance, you can use our SaaS instance `https://debug.dify.ai`, or self-hosted Dify instance.
+- `REMOTE_INSTALL_PORT`: The port of your Dify instance, default is 5003
+- `REMOTE_INSTALL_KEY`: You should get your debugging key from the Dify instance you used, at the right top of the plugin management page, you can see a button with a `debug` icon, click it and you will get the key.
+
+Run the following command to start your Plugin:
+
+```bash
+python -m main
 ```
 
-#### 返回结果
+Refresh the page of your Dify instance, you should be able to see your Plugin in the list now, but it will be marked as `debugging`, you can use it normally, but not recommended for production.
 
-工具将返回服务器上可用工具的列表，格式如下：
+### Package the Plugin
 
-```
-- tool_name_1: Tool description 1
-- tool_name_2: Tool description 2
-...
-```
+After all, just package your Plugin by running the following command:
 
-### 调用MCP工具
-
-`mcp_call_tool`工具用于调用MCP服务器上的特定工具。
-
-#### 参数详解
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| server_url | 字符串 | 是 | MCP服务器的SSE端点URL |
-| headers | 字符串 | 否 | HTTP请求头，JSON格式 |
-| timeout | 数字 | 否 | HTTP请求超时时间（秒），默认60秒 |
-| sse_read_timeout | 数字 | 否 | SSE读取超时时间（秒），默认300秒 |
-| tool_name | 字符串 | 是 | 要调用的工具名称 |
-| arguments | 字符串 | 否 | 工具参数，JSON格式。不传默认{} |
-
-#### 示例调用
-
-```json
-{
-  "server_url": "http://127.0.0.1:8000/sse",
-  "headers": "{\"Authorization\":\"Bearer your_token\"}",
-  "timeout": 60,
-  "sse_read_timeout": 300,
-  "tool_name": "example_tool",
-  "arguments": "{\"param1\":\"value1\",\"param2\":123}"
-}
+```bash
+dify-plugin plugin package ./ROOT_DIRECTORY_OF_YOUR_PLUGIN
 ```
 
-#### 返回结果
+you will get a `plugin.difypkg` file, that's all, you can submit it to the Marketplace now, look forward to your Plugin being listed!
 
-工具将返回调用结果，格式如下：
 
-```
-<结果内容>
-```
+## User Privacy Policy
 
-## 实际应用示例
-
-### 示例1：获取支持的数据库
-
-假设MCP服务器上有一个`mcp_db_support`工具，用于获取所有支持的数据库：
-
-```json
-{
-  "server_url": "http://your-mcp-server.com/sse",
-  "tool_name": "mcp_db_support",
-  "arguments": "{}"
-}
-```
-
-### 示例2：执行数据库SQL查询
-
-假设MCP服务器上有一个`mcp_db_exec`工具，用于执行数据库SQL查询：
-
-```json
-{
-  "server_url": "http://your-mcp-server.com/sse",
-  "tool_name": "mcp_db_exec",
-  "arguments": "{\"env\":\"sit\",\"sql\":\"select * from table\"}"
-}
-```
-
-### 示例3：添加或更新数据库配置
-
-假设MCP服务器上有一个`mcp_linux_lcs_jk_dbadd_db_config`工具，用于添加或更新数据库配置：
-
-```json
-{
-  "server_url": "http://your-mcp-server.com/sse",
-  "tool_name": "mcp_linux_lcs_jk_dbadd_db_config",
-  "arguments": "{\"random_string\":\"dummy\"}"
-}
-```
-
-## 故障排除
-
-如果遇到使用问题，请检查以下几点：
-
-1. **连接错误**：确保MCP服务器URL正确并且可访问
-2. **授权错误**：检查提供的headers是否包含正确的授权信息
-3. **超时错误**：考虑增加timeout和sse_read_timeout值
-4. **工具不存在**：使用`mcp_list_tools`确认服务器上是否有该工具
-5. **参数格式错误**：确保JSON格式正确，特别是在转义双引号时
-
-## 最佳实践
-
-1. 先使用`mcp_list_tools`确认可用工具，再使用`mcp_call_tool`调用
-2. 对于需要授权的MCP服务器，确保在headers中提供正确的凭据
-3. 根据网络条件和工具执行时间调整超时参数
-4. 对于安全敏感的应用，使用HTTPS连接
-5. 保存常用的配置，以便快速重用 
+Please fill in the privacy policy of the plugin if you want to make it published on the Marketplace, refer to [PRIVACY.md](PRIVACY.md) for more details.

@@ -1,40 +1,56 @@
 # MCP Config During Use
 
-A Dify plugin that allows configuring MCP (Model Context Protocol) connections during use. It enables discovering and calling tools via MCP protocol through HTTP with SSE transport, with configuration done at runtime.
+<div align="center">
 
-[English](#mcp-config-during-use) | [中文简体](README_zh.md)
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
+[![Dify Plugin](https://img.shields.io/badge/Dify-Plugin-green.svg)](https://dify.ai)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-red.svg)](https://github.com/your-repo/releases)
 
-## Features
+A Dify plugin that enables dynamic MCP (Model Context Protocol) server configuration during runtime with advanced transport strategy support.
 
-- Configure MCP server connection information for each call separately
-- List available tools on MCP servers
-- Call specific tools on MCP servers
-- Support HTTP headers configuration for authorization and other features
-- Configure different timeout parameters
+[English](#english) | [中文简体](README_zh.md)
 
-## Tool List
+</div>
 
-The plugin provides two main tools:
+---
 
-1. **List MCP Tools (mcp_list_tools)**
-   - Used to list all available tools on an MCP server
+## 🚀 Features
 
-2. **Call MCP Tool (mcp_call_tool)**
-   - Used to call a specific tool on an MCP server
+### 🔄 **Multiple Transport Strategies**
+- **SSE (Server-Sent Events)**: Real-time bidirectional communication
+- **Streamable HTTP**: HTTP-based streaming with session management
+- **Auto Detection**: Automatically detects server-supported transport protocols
 
-## Usage
+### 🔧 **Advanced Capabilities**
+- ✅ **Runtime Configuration**: Configure MCP servers during each call
+- ✅ **Transport Auto-Detection**: Smart protocol detection based on server capabilities
+- ✅ **HTTP Redirect Support**: Seamless redirect handling
+- ✅ **Session Management**: Persistent sessions for Streamable HTTP
+- ✅ **Flexible Headers**: Custom HTTP headers for authentication
+- ✅ **Timeout Control**: Configurable timeout parameters
 
-### List MCP Tools
+### 🛠 **Tool Arsenal**
+| Tool | Description | Purpose |
+|------|-------------|---------|
+| **mcp_list_tools** | List available tools | Discover MCP server capabilities |
+| **mcp_call_tool** | Execute specific tools | Invoke MCP server functions |
 
-Use the `mcp_list_tools` tool to list all available tools on a specified MCP server.
+---
 
-Parameters:
-- `server_url` (required): The SSE endpoint URL of the MCP Server
-- `headers` (optional): HTTP headers in JSON format
-- `timeout` (optional): HTTP request timeout in seconds
-- `sse_read_timeout` (optional): SSE read timeout in seconds
+## 📖 Usage Guide
 
-Example:
+### 🔍 **List MCP Tools**
+
+Discover all available tools on an MCP server:
+
+**Parameters:**
+- `server_url` **(required)**: MCP server endpoint URL
+- `headers` *(optional)*: HTTP headers in JSON format
+- `timeout` *(optional)*: HTTP request timeout (seconds)
+- `sse_read_timeout` *(optional)*: SSE read timeout (seconds)
+
+**Example:**
 ```json
 {
   "server_url": "http://127.0.0.1:8000/sse",
@@ -44,19 +60,19 @@ Example:
 }
 ```
 
-### Call MCP Tool
+### ⚡ **Call MCP Tool**
 
-Use the `mcp_call_tool` tool to call a specific tool on an MCP server.
+Execute a specific tool on an MCP server:
 
-Parameters:
-- `server_url` (required): The SSE endpoint URL of the MCP Server
-- `headers` (optional): HTTP headers in JSON format
-- `timeout` (optional): HTTP request timeout in seconds
-- `sse_read_timeout` (optional): SSE read timeout in seconds
-- `tool_name` (required): Name of the tool to execute
-- `arguments` (required): Tool arguments in JSON format
+**Parameters:**
+- `server_url` **(required)**: MCP server endpoint URL
+- `headers` *(optional)*: HTTP headers in JSON format
+- `timeout` *(optional)*: HTTP request timeout (seconds)
+- `sse_read_timeout` *(optional)*: SSE read timeout (seconds)
+- `tool_name` **(required)**: Name of the tool to execute
+- `arguments` **(required)**: Tool arguments in JSON format
 
-Example:
+**Example:**
 ```json
 {
   "server_url": "http://127.0.0.1:8000/sse",
@@ -68,25 +84,41 @@ Example:
 }
 ```
 
-## Differences from Pre-authorized MCP Tools
+---
 
-Compared to pre-authorized MCP tools, the main differences of this plugin are:
+## ⚠️ **Important Notes**
 
-1. **Configuration Method**: This plugin allows configuring connection information at call time, while pre-authorized MCP tools require configuration at the provider level
-2. **Flexibility**: Different tool calls can connect to different MCP servers
-3. **Isolation**: Each application can use its own MCP server configuration without affecting others
-4. **Permission Management**: No need for global authorization at the provider level, providing more flexible permission control
+### **Transport Configuration**
+- The plugin automatically detects server-supported transport protocols
+- SSE is preferred for real-time communication
+- Streamable HTTP is used as fallback or for specific requirements
 
-## Requirements
+### **JSON Parameter Handling**
+- All JSON objects in `headers` and `arguments` must be string-encoded
+- Ensure proper double-quote escaping in JSON strings
 
-- Python 3.12 or higher
-- Dependencies:
-  - httpx >= 0.27.0
-  - httpx-sse >= 0.4.0
-  - dify_plugin = 0.0.1b76
+### **Timeout Considerations**
+- Adjust `timeout` for connection establishment
+- Configure `sse_read_timeout` for long-running operations
+- Consider network latency in timeout settings
 
-## Notes
+### **Session Management**
+- Streamable HTTP automatically manages session IDs
+- Sessions are maintained across multiple requests
+- Session cleanup is handled automatically
 
-- Ensure the provided MCP server URL is valid and supports SSE connections
-- In the `headers` and `arguments` parameters, JSON objects need to be converted to strings with properly escaped double quotes
-- Adjust timeout parameters as needed, especially for long-running tool calls 
+---
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the Dify Community**
+
+⭐ **Star this repo if you find it useful!** ⭐
+
+</div> 
