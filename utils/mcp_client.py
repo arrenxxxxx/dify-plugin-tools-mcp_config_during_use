@@ -1,13 +1,82 @@
 import json
 import logging
 import time
+from abc import ABC, abstractmethod
+from enum import Enum
 from queue import Queue, Empty
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from httpx_sse import connect_sse
+from httpx_sse import connect_sse, EventSource
+
+
+class TransportType(Enum):
+    """transport type enum"""
+    SSE = "sse"
+    STREAMABLE_HTTP = "streamable_http"
+    AUTO_DETECT = "auto_detect"
+
+class TransportStrategy(ABC):
+    """Transport Strategy Abstract Base Class"""
+    
+    def __init__(self, url: str, headers: dict[str, Any] | None = None, 
+                 timeout: float = 60, max_retries: int = 3, retry_interval: float = 2.0):
+        self.url = url
+        self.headers = headers or {}
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_interval = retry_interval
+        self.client = httpx.Client(headers=headers)
+        self._request_id = 0
+        self.connect()
+    
+    @abstractmethod
+    def connect(self) -> None:
+        """connect to the transport"""
+        pass
+    
+    @abstractmethod
+    def send_message(self, data: dict) -> dict:
+        """send message and return response"""
+        pass
+    
+    @abstractmethod
+    def close(self) -> None:
+        """close the transport"""
+        pass
+    
+    def _get_next_request_id(self) -> int:
+        """get the next request id"""
+        self._request_id += 1
+        return self._request_id
+
+    @staticmethod
+    def create_initialize_data(request_id: int = 1) -> dict:
+        """create the initialize data"""
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-27",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "mcp",
+                    "version": "1.10.1"
+                }
+            }
+        }
+
+    @staticmethod
+    def create_initialized_notification() -> dict:
+        """create the initialized notification data"""
+        return {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {}
+        }
 
 
 def remove_request_params(url: str) -> str:
@@ -15,29 +84,157 @@ def remove_request_params(url: str) -> str:
 
 
 class McpClient:
+    """MCP Client Main Class, using strategy pattern to support multiple transport types"""
+    
     def __init__(self, url: str,
                  headers: dict[str, Any] | None = None,
                  timeout: float = 60,
-                 sse_read_timeout: float = 60 * 5,
+                 sse_read_timeout: float = 300,
                  max_retries: int = 3,
                  retry_interval: float = 2.0,
-                 ):
-        self.url = url
-        self.timeout = timeout
+                 transport_type: TransportType = TransportType.AUTO_DETECT):
+        """
+        initialize the MCP client
+        
+        Args:
+            url: MCP server URL
+            headers: request headers
+            timeout: timeout
+            sse_read_timeout: SSE read timeout
+            max_retries: maximum retry count
+            retry_interval: retry interval
+            transport_type: transport type, default auto detect
+        """
+        self.transport = TransportFactory.create_transport(
+            url=url,
+            transport_type=transport_type,
+            headers=headers,
+            timeout=timeout,
+            sse_read_timeout=sse_read_timeout,
+            max_retries=max_retries,
+            retry_interval=retry_interval
+        )
+        self.connect()
+    
+    def connect(self) -> None:
+        """connect to the transport"""
+        self.transport.connect()
+    
+    def close(self) -> None:
+        """close the transport"""
+        self.transport.close()
+    
+    def send_message(self, data: dict) -> dict:
+        """send message"""
+        return self.transport.send_message(data)
+
+    def initialize(self):
+        """initialize the MCP connection"""
+        self.transport.initialize()
+
+    def list_tools(self):
+        """list the available tools"""
+        tools_data = {
+            "jsonrpc": "2.0",
+            "id": self.transport._get_next_request_id(),
+            "method": "tools/list",
+            "params": {}
+        }
+        return self.send_message(tools_data).get("result", {}).get("tools", [])
+
+    def call_tool(self, tool_name: str, tool_args: dict):
+        """call the tool"""
+        call_data = {
+            "jsonrpc": "2.0",
+            "id": self.transport._get_next_request_id(),
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": tool_args
+            }
+        }
+        return self.send_message(call_data).get("result", {}).get("content", [])
+
+
+class McpClientsUtil:
+    """MCP Client Utility Class"""
+
+    @staticmethod
+    def fetch_tools(server_url: str, 
+                    headers: Optional[dict] = None, 
+                    timeout: float = 60, 
+                    sse_read_timeout: float = 300,
+                    transport_type: TransportType = TransportType.AUTO_DETECT) -> list[dict]:
+        """fetch the tools from the MCP server"""
+        client = McpClient(
+            url=server_url,
+            headers=headers,
+            timeout=timeout,
+            sse_read_timeout=sse_read_timeout,
+            transport_type=transport_type
+        )
+        try:
+            client.initialize()
+            return client.list_tools()
+        finally:
+            client.close()
+
+    @staticmethod
+    def execute_tool(server_url: str,
+                     tool_name: str, 
+                     tool_args: dict[str, Any],
+                     headers: Optional[dict] = None, 
+                     timeout: float = 60, 
+                     sse_read_timeout: float = 300,
+                     transport_type: TransportType = TransportType.AUTO_DETECT) -> str:
+        """execute the tool on the MCP server"""
+        client = McpClient(
+            url=server_url,
+            headers=headers,
+            timeout=timeout,
+            sse_read_timeout=sse_read_timeout,
+            transport_type=transport_type
+        )
+        try:
+            client.initialize()
+            return client.call_tool(tool_name, tool_args)
+        except Exception as e:
+            error_msg = f"Error executing tool: {str(e)}"
+            logging.error(error_msg)
+            return error_msg
+        finally:
+            client.close()
+
+
+class SseTransportStrategy(TransportStrategy):
+    """SSE transport strategy implementation"""
+    
+    def __init__(self, url: str, headers: dict[str, Any] | None = None, 
+                 timeout: float = 60, sse_read_timeout: float = 60 * 5,
+                 max_retries: int = 3, retry_interval: float = 2.0):
         self.sse_read_timeout = sse_read_timeout
-        self.max_retries = max_retries
-        self.retry_interval = retry_interval
         self.endpoint_url = None
-        self.client = httpx.Client(headers=headers)
-        self._request_id = 0
         self.message_queue = Queue()
         self.response_ready = Event()
         self.should_stop = Event()
         self._listen_thread = None
         self._connected = Event()
-        self.connect()
+        super().__init__(url, headers, timeout, max_retries, retry_interval)
+    
+    def connect(self) -> None:
+        """connect to the SSE endpoint"""
+        self._listen_thread = Thread(target=self._listen_messages, daemon=True)
+        self._listen_thread.start()
+        if not self._connected.wait(timeout=self.timeout):
+            raise TimeoutError("MCP Server connection timeout!")
+    
+    def initialize(self):
+        """initialize the SSE connection"""
+        self.send_message(self.create_initialize_data())
+        self.send_message(self.create_initialized_notification())
 
     def _listen_messages(self) -> None:
+        """listen to the SSE messages"""
         logging.info(f"Connecting to SSE endpoint: {remove_request_params(self.url)}")
         retry_count = 0
         
@@ -101,10 +298,12 @@ class McpClient:
                 else:
                     logging.error(f"Max retries ({self.max_retries}) exceeded for SSE connection")
                     break
-
-    def send_message(self, data: dict):
+    
+    def send_message(self, data: dict) -> dict:
+        """send message to the SSE endpoint"""
         if not self.endpoint_url:
             raise RuntimeError("please call connect() first")
+        
         logging.debug(f"Sending client message: {data}")
         response = self.client.post(
             url=self.endpoint_url,
@@ -114,6 +313,7 @@ class McpClient:
         )
         response.raise_for_status()
         logging.debug(f"Client message sent successfully: {response.status_code}")
+        
         if "id" in data:
             message_id = data["id"]
             while True:
@@ -129,103 +329,178 @@ class McpClient:
                 except Empty:
                     pass
         return {}
-
-    def connect(self) -> None:
-        self._listen_thread = Thread(target=self._listen_messages, daemon=True)
-        self._listen_thread.start()
-        if not self._connected.wait(timeout=self.timeout):
-            raise TimeoutError("MCP Server connection timeout!")
-
+    
     def close(self) -> None:
+        """close the SSE connection"""
         self.should_stop.set()
         self.client.close()
         if self._listen_thread and self._listen_thread.is_alive():
             self._listen_thread.join(timeout=10)
+    
+
+class StreamableHttpTransportStrategy(TransportStrategy):
+    """Streamable HTTP transport strategy implementation"""
+    
+    def __init__(self, url: str, headers: dict[str, Any] | None = None, 
+                 timeout: float = 60, max_retries: int = 3, retry_interval: float = 2.0, 
+                 session_id: str | None = None):
+        super().__init__(url, headers, timeout, max_retries, retry_interval)
+        self.mcp_endpoint = url
+        self.pre_initialized = False
+        self.session_id = session_id
+
+    def connect(self) -> None:
+        """connect to the Streamable HTTP endpoint (no additional operation)"""
+        pass
 
     def initialize(self):
-        init_data = {
-            "jsonrpc": "2.0",
-            "id": self._request_id,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {
-                    "name": "mcp",
-                    "version": "0.1.0"
-                }
-            }
+        """initialize the Streamable HTTP connection"""
+
+        if not self.pre_initialized:
+            self.pre_initialize()
+
+        self.send_message(self.create_initialized_notification())
+
+    def pre_initialize(self):
+        """pre-initialize the Streamable HTTP connection"""
+        self.send_message(self.create_initialize_data())
+
+        self.pre_initialized = True
+
+    def send_message(self, data: dict) -> dict:
+        """send message to the MCP endpoint"""
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream'
         }
-        self.send_message(init_data)
-        notify_data = {
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-            "params": {}
-        }
-        self.send_message(notify_data)
-
-    def list_tools(self):
-        tools_data = {
-            "jsonrpc": "2.0",
-            "id": self._request_id,
-            "method": "tools/list",
-            "params": {}
-        }
-        return self.send_message(tools_data).get("result", {}).get("tools", [])
-
-    def call_tool(self, tool_name: str, tool_args: dict):
-        call_data = {
-            "jsonrpc": "2.0",
-            "id": self._request_id,
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": tool_args
-            }
-        }
-        return self.send_message(call_data).get("result", {}).get("content", [])
-
-
-class McpClientsUtil:
-
-    @staticmethod
-    def fetch_tools(server_url: str, 
-                    headers: Optional[dict] = None, 
-                    timeout: float = 60, 
-                    sse_read_timeout: float = 300) -> list[dict]:
-        """fetch tools from mcp server"""
-        client = McpClient(
-            url=server_url,
-            headers=headers,
-            timeout=timeout,
-            sse_read_timeout=sse_read_timeout
-        )
+        
+        if self.session_id:
+            headers['Mcp-Session-Id'] = self.session_id
+        
+        logging.debug(f"Sending message to MCP endpoint: {data}")
+        
         try:
-            client.initialize()
-            return client.list_tools()
-        finally:
-            client.close()
+            response = self.client.post(
+                url=self.mcp_endpoint,
+                json=data,
+                headers=headers,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            if 'Mcp-Session-Id' in response.headers:
+                self.session_id = response.headers['Mcp-Session-Id']
+                logging.debug(f"Received session ID: {self.session_id}")
 
-    @staticmethod
-    def execute_tool(server_url: str,
-                     tool_name: str, 
-                     tool_args: dict[str, Any],
-                     headers: Optional[dict] = None, 
-                     timeout: float = 60, 
-                     sse_read_timeout: float = 300) -> str:
-        """execute tool on mcp server"""
-        client = McpClient(
-            url=server_url,
-            headers=headers,
-            timeout=timeout,
-            sse_read_timeout=sse_read_timeout
-        )
-        try:
-            client.initialize()
-            return client.call_tool(tool_name, tool_args)
+            logging.debug(f"response content: {response.content}")
+            if not response.content:
+                return {}
+            
+            content_type = response.headers.get('Content-Type', '')
+
+            if 'application/json' in content_type:
+                result = response.json()
+                logging.debug(f"Received JSON response: {result}")
+                return result
+                
+            elif 'text/event-stream' in content_type:
+                logging.debug("Handling SSE stream response")
+                for sse in EventSource(response).iter_sse():
+                    if sse.event != "message":
+                        raise Exception(f"StreamableHttpTransportStrategy - Unknown Server-Sent Event: {sse.event}")
+                    message = json.loads(sse.data)
+                return message
+            else:
+                logging.warning(f"Unexpected content type: {content_type}")
+                return {}
+                
+        except httpx.HTTPStatusError as e:
+            logging.error(f"HTTP error: {e.response.status_code} - {e.response.text}")
+            raise
         except Exception as e:
-            error_msg = f"Error executing tool: {str(e)}"
-            logging.error(error_msg)
-            return error_msg
-        finally:
-            client.close()
+            logging.error(f"Error sending message: {e}")
+            raise
+    
+    def close(self) -> None:
+        """close the Streamable HTTP connection"""
+        self.client.close()
+        logging.debug("Streamable HTTP transport closed")
+    
+
+class TransportFactory:
+    """Transport Strategy Factory Class"""
+    
+    @staticmethod
+    def create_transport(url: str, 
+                        transport_type: TransportType = TransportType.AUTO_DETECT,
+                        headers: dict[str, Any] | None = None,
+                        timeout: float = 60,
+                        sse_read_timeout: float = 300,
+                        max_retries: int = 3,
+                        retry_interval: float = 2.0) -> TransportStrategy:
+        """create the transport strategy instance"""
+        
+        if transport_type == TransportType.SSE:
+            return SseTransportStrategy(
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                sse_read_timeout=sse_read_timeout,
+                max_retries=max_retries,
+                retry_interval=retry_interval
+            )
+        elif transport_type == TransportType.STREAMABLE_HTTP:
+            return StreamableHttpTransportStrategy(
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_interval=retry_interval
+            )
+        elif transport_type == TransportType.AUTO_DETECT:
+            return TransportFactory._auto_detect_transport(
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                sse_read_timeout=sse_read_timeout,
+                max_retries=max_retries,
+                retry_interval=retry_interval
+            )
+        else:
+            raise ValueError(f"Unsupported transport type: {transport_type}")
+    
+    @staticmethod
+    def _auto_detect_transport(url: str,
+                              headers: dict[str, Any] | None = None,
+                              timeout: float = 60,
+                              sse_read_timeout: float = 300,
+                              max_retries: int = 3,
+                              retry_interval: float = 2.0) -> TransportStrategy:
+        """auto detect and create the appropriate transport strategy"""
+        
+        logging.info(f"Auto-detecting transport type for: {url}")
+        try:
+            streamable_http_transport = StreamableHttpTransportStrategy(
+                url=url,
+                headers=headers,
+                timeout=timeout,
+                max_retries=max_retries,
+                retry_interval=retry_interval,
+            )
+            streamable_http_transport.pre_initialize()
+            return streamable_http_transport
+        except Exception as e:
+            logging.info(f"Streamable HTTP detection failed: {e}")
+        
+        # if Streamable HTTP detection fails, fall back to SSE
+        logging.info("Falling back to SSE transport")
+        return SseTransportStrategy(
+            url=url,
+            headers=headers,
+            timeout=timeout,
+            sse_read_timeout=sse_read_timeout,
+            max_retries=max_retries,
+            retry_interval=retry_interval
+        )
+
+
