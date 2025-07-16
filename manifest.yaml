@@ -1,4 +1,4 @@
-version: 0.1.0
+version: 0.1.1
 type: plugin
 author: arrenxxxxx
 name: mcp_config_during_use
@@ -18,7 +18,7 @@ plugins:
 tags:
   - utilities
 meta:
-  version: 0.1.0
+  version: 0.1.1
   arch:
     - amd64
     - arm64
