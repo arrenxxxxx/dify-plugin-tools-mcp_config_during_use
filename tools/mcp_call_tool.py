@@ -49,7 +49,7 @@ class McpCallTool(Tool):
                 timeout=timeout,
                 sse_read_timeout=sse_read_timeout
             )
-            yield self.create_text_message(f"{result}")
+            yield self.create_text_message(json.dumps(result, ensure_ascii=False))
         except Exception as e:
             error_msg = f"Error calling MCP Server tool: {str(e)}"
             logging.error(error_msg)

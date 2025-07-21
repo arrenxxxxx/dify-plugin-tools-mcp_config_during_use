@@ -1,4 +1,4 @@
-version: 0.1.1
+version: 0.1.2
 type: plugin
 author: arrenxxxxx
 name: mcp_config_during_use
@@ -6,8 +6,8 @@ label:
   en_US: MCP Config During Use
   zh_Hans: 使用时配置的MCP工具
 description:
-  en_US: Fetch and call tools by MCP protocol through HTTP with SSE Or Streamable transport, configuring during use.
-  zh_Hans: 通过HTTP with SSE 或 Streamable Http传输使用MCP协议来发现和调用工具，使用时配置。
+  en_US: Adaptive use of the MCP protocol to discover and call tools via Streamable Http or SSE transport, configured when used.
+  zh_Hans: 自适应通过Streamable Http或SSE传输使用MCP协议来发现和调用工具，使用时配置。
 icon: icon.svg
 resource:
   memory: 268435456
@@ -18,7 +18,7 @@ plugins:
 tags:
   - utilities
 meta:
-  version: 0.1.1
+  version: 0.1.2
   arch:
     - amd64
     - arm64

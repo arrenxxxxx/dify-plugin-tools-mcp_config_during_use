@@ -37,7 +37,7 @@ class McpListToolsTool(Tool):
             if not tools:
                 yield self.create_text_message("[]")
                 return
-            yield self.create_text_message(f"{tools}")
+            yield self.create_text_message(json.dumps(tools, ensure_ascii=False))
         except Exception as e:
             error_msg = f"Error listing MCP Server tools: {str(e)}"
             logging.error(error_msg)
